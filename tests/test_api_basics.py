@@ -26,10 +26,10 @@ def test01_compatible_datatypes():
 
     table4 = Table()
     table4['A'] = [-1, 1]
-    table4['B'] = [None, 1]     
+    table4['B'] = [None, 1]
     table4['C'] = [-1.1, 1.1]
-    table4['D'] = ["", "1000"]     
-    table4['E'] = [None, "1"]   
+    table4['D'] = ["", "1000"]
+    table4['E'] = [None, "1"]
     table4['F'] = [False, True]
     table4['G'] = [now, now]
     table4['H'] = [now.date(), now.date()]
@@ -42,7 +42,7 @@ def test01_compatible_datatypes():
 
     table4.save = True  # testing that save keeps the data in HDF5.
     del table4  
-    
+
     # recover all active tables from HDF5.
     tables = Table.reload_saved_tables()
     table5 = tables[0]  # this is the content of table4
@@ -50,10 +50,10 @@ def test01_compatible_datatypes():
     assert table5['A'] == np.array([-1,1])  # numpy test
     assert table5['A'] == (-1,1)  # tuple test
     assert table5['A'] == [-1, 1]
-    assert table5['B'] == [None, 1]     
+    assert table5['B'] == [None, 1]
     assert table5['C'] == [-1.1, 1.1]
-    assert table5['D'] == ["", "1000"]     
-    assert table5['E'] == [None, "1"]   
+    assert table5['D'] == ["", "1000"]
+    assert table5['E'] == [None, "1"]
     assert table5['F'] == [False, True]
     assert table5['G'] == [now, now]
     assert table5['H'] == [now.date(), now.date()]
@@ -62,7 +62,7 @@ def test01_compatible_datatypes():
     assert table5['K'] == ['b',"嗨"]
     assert table5['L'] == [-10**23,10**23]  # int > int64. 
     assert table5['M'] == [float('inf'), float('-inf')]
-    rows = [row for row in table5.rows]  # test .rows iterator.
+    rows = list(table5.rows)
     assert len(rows) == 2
     assert rows[0][0] == -1
     assert rows[1][0] == 1
@@ -104,9 +104,11 @@ class Quarternion(object):  # I'm pretty sure these are not in the standard libr
     def __tuple__(self):
         return self.a,self.b,self.c,self.d
     def __eq__(self,other):
-        if not isinstance(other, Quarternion):
-            return False
-        return self.__tuple__() == other.__tuple__()
+        return (
+            self.__tuple__() == other.__tuple__()
+            if isinstance(other, Quarternion)
+            else False
+        )
 
 def test_unknown_datatype():
     t = Table()
@@ -139,7 +141,7 @@ def test_iterate_with_empty_column():
     t = Table()
     t.add_columns('a','b')
     t['a'] = [1,2,3]
-    rr = [row for row in t.rows]
+    rr = list(t.rows)
     assert rr == [[1,None], [2,None], [3,None]]
 
 
@@ -182,11 +184,11 @@ def test03_verify_single_page_updates():
     L[len(L):] = [10,11,12]  # extend
     C[len(C):] = [10,11,12]  # extend
     assert list(C[:]) == L  # array([-3, -2, -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12])
-    L[0:2] = [20]  # reduce  # array([20, -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12])
-    C[0:2] = [20]  # reduce
-    assert list(C[:]) == L  
-    L[0:1] = [-3,-2]  # expand
-    C[0:1] = [-3,-2]  # expand
+    L[:2] = [20]
+    C[:2] = [20]
+    assert list(C[:]) == L
+    L[:1] = [-3,-2]
+    C[:1] = [-3,-2]
     assert list(C[:]) == L
     L[4:8] = [11,12,13,14]  # replace
     C[4:8] = [11,12,13,14]  # replace
@@ -203,8 +205,8 @@ def test03_verify_multi_page_updates():
     L = list(range(10))
     L[:0] = [-3,-2,-1]  # insert
     L[len(L):] = [10,11,12]  # extend
-    L[0:2] = [20]  # reduce
-    L[0:1] = [-3,-2]  # expand
+    L[:2] = [20]
+    L[:1] = [-3,-2]
     L[4:8] = [11,12,13,14]  # replace
 
 
@@ -241,16 +243,16 @@ def test03_verify_slice_operator_for_uniform_datatype():
     table4['A'][3], L[3] = 30, 30  # update
     assert L == [0, 10, 20, 30, 4, 5, 100]
     assert table4['A'] == L
-    
+
     # operations below are handled by __getitem__ with a slice as a key.
     table4['A'][4:5], L[4:5] = [40,50], [40,50]  # update many as len(4:5)== 1 but len(values)==2
     assert L == [0, 10, 20, 30, 40, 50, 5, 100]
     assert table4['A'] == L
-    
+
     table4['A'][-2:-1], L[-2:-1] = [60,70,80,90],[60,70,80,90]  # update 1, insert 3
     assert L == [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     assert table4['A'] == L
-    
+
     table4['A'][2:4], L[2:4] = [2], [2]  # update + delete 1
     assert L == [0, 10, 2, 40, 50, 60, 70, 80, 90, 100]
     assert table4['A'] == L
@@ -259,7 +261,7 @@ def test03_verify_slice_operator_for_uniform_datatype():
     table4['A'][x:], L[len(L):] = [110], [110]  # append
     assert L == [0, 10, 2, 40, 50, 60, 70, 80, 90, 100, 110]
     assert table4['A'] == L
-    
+
     del L[:3]
     del table4['A'][:3]
     assert L == [40, 50, 60, 70, 80, 90, 100, 110]
@@ -288,7 +290,9 @@ def test03_verify_slice_operator_for_uniform_datatype():
     col = table4['A']
     try:
         col[3::3] = [5] * 9
-        assert False, f"attempt to assign sequence of size 9 to extended slice of size 3"
+        assert (
+            False
+        ), "attempt to assign sequence of size 9 to extended slice of size 3"
     except ValueError:
         assert True
 
@@ -304,7 +308,7 @@ def test03_verify_slice_operator_for_uniform_datatype():
 def test03_verify_slice_operator_for_multitype_datasets():
     t = Table()
     t['A'] = ["1",2,3.0]
-    
+
     # VALUES! NOT SLICES!
     # ---------------
     L = t['A'].copy()
@@ -314,11 +318,11 @@ def test03_verify_slice_operator_for_multitype_datasets():
         assert False, "allowing this would insert [4,5] in L as [[4,5],2,3.0] which would break the column format."
     except TypeError:
         assert True
- 
+
     L = t['A'].copy()
     L[-3] = 4
     assert L ==[4,2,3.0]
-    
+
     # SLICES - ONE VALUE!
     # -------------------
 
@@ -327,7 +331,7 @@ def test03_verify_slice_operator_for_multitype_datasets():
     assert L == [4,"5","1",2,3.0]
 
     L = t['A'].copy()
-    L[0:] = [4,5]  # SLICE: REPLACE L after 0 with NEW
+    L[:] = [4,5]
     assert L == [4,5]  # <-- check that page type becomes simple!
 
     L = t['A'].copy()
@@ -345,7 +349,7 @@ def test03_verify_slice_operator_for_multitype_datasets():
     # SLICES - TWO VALUES!
     # --------------------
     L = t['A'].copy()
-    L[0:1] = [4,5]  # SLICE: DROP L between A,B (L[0]=[1]). INSERT NEW starting on 0.
+    L[:1] = [4,5]
     assert L == [4,5,2,3]
 
     L = t['A'].copy()
@@ -353,7 +357,7 @@ def test03_verify_slice_operator_for_multitype_datasets():
     assert L == ["1",4,"5",2,3.0]
 
     L = t['A'].copy()
-    L[0:2] = [4,"5",6.0]
+    L[:2] = [4,"5",6.0]
     assert L == [4,"5",6.0,3.0]
 
     L = t['A'].copy()
@@ -361,21 +365,21 @@ def test03_verify_slice_operator_for_multitype_datasets():
     assert L == ["1","4"]
 
     L = t['A'].copy()
-    L[0:3] = [4]
+    L[:3] = [4]
     assert L == [4]  # SLICE: DROP L between A,B (L[0:3] = [1,2,3]). INSERT NEW starting on 0
 
     # SLICES - THREE VALUES!
     # ----------------------
 
     L = t['A'].copy()
-    L[0::2] = [4,5]  # SLICE: for new_index,position in enumerate(range(0,end,step=2)): REPLACE L[position] WITH NEW[ew_index]
+    L[::2] = [4,5]
     assert L == [4,2,5]
 
     t = Table()
     t['A'] = ["1", 1, 1.0, "1", 1, 1.0]
 
     L = t['A'].copy()
-    L[0::2] = [2,3,4]  # SLICE: for new_index,position in enumerate(range(0,end,step=2)): REPLACE L[position] WITH NEW[ew_index]
+    L[::2] = [2,3,4]
     assert L == [2, 1, 3, "1", 4, 1.0]
 
     L = t['A'].copy()
@@ -408,7 +412,7 @@ def test03_verify_slice_operator_for_multitype_datasets():
     L = t['A'].copy()
     new = [2,3,"4"]
     for new_ix,pos in enumerate(range(*slice(None,None,-2).indices(len(L)))):
-        L[pos] = new[new_ix] 
+        L[pos] = new[new_ix]
     assert L == ["1", "4", 1.0, 3, 1, 2]
 
     # What happens if we leave out the first : ?
@@ -425,7 +429,7 @@ def test03_verify_slice_operator_for_multitype_datasets():
 
     t = Table()
     t['A'] = ["1",2,3.0]
-    
+
     L = t['A'].copy()
     # L[None] = []  # TypeError: list indices must be integers or slices, not NoneType
     assert list(L[None : None]) == ["1",2,3.0]
@@ -436,27 +440,27 @@ def test03_verify_slice_operator_for_multitype_datasets():
     assert list(L[None : None :  2  ]) == ["1",3]
 
     L = t['A'].copy()
-    L[None : None] = [4,5]  
+    L[None : None] = [4,5]
     assert L == [4,5]
 
     L = t['A'].copy()
-    L[None : None:   1  ] = [4,5]  
+    L[None : None:   1  ] = [4,5]
     assert L==[4,5]
 
     L = t['A'].copy()
-    L[None : None : None] = [4,5]  
+    L[None : None : None] = [4,5]
     assert L == [4,5]
 
     L = t['A'].copy()
-    L[  1  : None : None] = [4,5]  
+    L[  1  : None : None] = [4,5]
     assert L == ["1",4,5]
 
     L = t['A'].copy()
-    L[None :   1  : None] = [4,5]  
+    L[None :   1  : None] = [4,5]
     assert L == [4,5,2,3.0]
 
     L = t['A'].copy()
-    L[None : None :  2  ] = [4,5]  
+    L[None : None :  2  ] = [4,5]
     assert L==[4,2,5]
 
     L = t['A'].copy()

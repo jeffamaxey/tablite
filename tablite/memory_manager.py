@@ -213,12 +213,10 @@ class MemoryManager(object):
         with h5py.File(self.path, READONLY) as h5:
             if group not in h5:
                 return Pages()
-            else:
-                dset = h5[group]
-                pages = json.loads(dset.attrs['pages'])
-                unique_pages = {pg_grp:Page.load(pg_grp) for pg_grp in set(pages)}   # loading the page once and then copy the pointer,
-                loaded_pages = Pages([unique_pages[pg_grp] for pg_grp in pages])            # is 10k faster than loading the page 10k times.
-                return loaded_pages
+            dset = h5[group]
+            pages = json.loads(dset.attrs['pages'])
+            unique_pages = {pg_grp:Page.load(pg_grp) for pg_grp in set(pages)}   # loading the page once and then copy the pointer,
+            return Pages([unique_pages[pg_grp] for pg_grp in pages])
 
     def get_ref_count(self, page):
         assert isinstance(page, Page)
@@ -227,7 +225,7 @@ class MemoryManager(object):
     def reset_storage(self):
         log.info(f"{getpid()} resetting storage.")
         with h5py.File(self.path, TRUNCATE) as h5:
-            assert list(h5.keys()) == []
+            assert not list(h5.keys())
         time.sleep(1)  # let the OS flush the write outbuffer.
         
     @timeout
@@ -383,8 +381,8 @@ class Pages(list):
             elif start <= a and b <= stop:  # cases (10,11,12,13)
                 pages.append(page)
             else:  # cases (3,4,5,6,7)
-                p_start = a if start < a else start
-                p_stop = b if stop > b else stop                   
+                p_start = max(start, a)
+                p_stop = min(stop, b)
                 data = page[p_start-a:p_stop-a]
                 if len(data):
                     new = Page(data)
@@ -519,7 +517,7 @@ class GenericPage(object):
 
         if not isinstance(data, np.ndarray):
             raise TypeError
-            
+
         if data.dtype.char in cls._MixedTypes:
             if types is not None and max(types, key=types.get) == type(None) and len(types)>1:
                 pg_cls = SparseType
@@ -533,8 +531,7 @@ class GenericPage(object):
             raise NotImplementedError(f"method missing for {data.dtype.char}")
 
         group = f"/page/{cls.new_id()}"
-        pg = pg_cls(group,data)
-        return pg
+        return pg_cls(group,data)
     
     def __init__(self, group):        
         if not group.startswith('/page'):
@@ -689,7 +686,7 @@ class SimpleType(GenericPage):
 
     def extend(self, values):
         if not isinstance(values, (list, tuple, np.ndarray)):
-            raise ValueError(f".extend requires an iterable")
+            raise ValueError(".extend requires an iterable")
         with h5py.File(self.path, READWRITE) as h5:
             dset = h5[self.group]
 
@@ -703,27 +700,25 @@ class SimpleType(GenericPage):
         with h5py.File(self.path, READWRITE) as h5:
             dset = h5[self.group]
             result = np.where(dset == value)
-            if result[0]:
-                ix = result[0][0]
-                data = dset[:]
-                dset.resize(len(dset)-1, axis=0)
-                dset[:ix] = data[:ix]
-                dset[ix:] = data[ix+1:]
-                self._len = len(dset)
-            else:
+            if not result[0]:
                 raise IndexError(f"value not found: {value}")
+            ix = result[0][0]
+            data = dset[:]
+            dset.resize(len(dset)-1, axis=0)
+            dset[:ix] = data[:ix]
+            dset[ix:] = data[ix+1:]
+            self._len = len(dset)
     
     def remove_all(self, value):  # Column will never call this.
         with h5py.File(self.path, READWRITE) as h5:
             dset = h5[self.group]
             mask = (dset != value)
-            if mask.any():
-                new = np.compress(mask, dset[:], axis=0)
-                dset.resize(len(new), axis=0)
-                dset[:] = new
-                self._len = len(dset)
-            else:
+            if not mask.any():
                 raise IndexError(f"value not found: {value}")
+            new = np.compress(mask, dset[:], axis=0)
+            dset.resize(len(new), axis=0)
+            dset[:] = new
+            self._len = len(dset)
 
     def pop(self, index):
         with h5py.File(self.path, READWRITE) as h5:
@@ -847,15 +842,13 @@ class StringType(GenericPage):
         with h5py.File(self.path, READWRITE) as h5:
             dset = h5[self.group]
             value = np.array(value, dtype=dset.dtype)[0]
-            result = np.where(dset == value)
-            if result:
-                ix = result[0][0]
-                data = dset[:]
-                dset.resize(len(dset)-1, axis=0)
-                dset[:ix] = data[:ix]
-                dset[ix:] = data[ix+1:]
-            else:
+            if not (result := np.where(dset == value)):
                 raise IndexError(f"value not found: {value}")
+            ix = result[0][0]
+            data = dset[:]
+            dset.resize(len(dset)-1, axis=0)
+            dset[:ix] = data[:ix]
+            dset[ix:] = data[ix+1:]
             self._len = len(dset)
     
     def remove_all(self, value):  # Column will never call this.
@@ -863,12 +856,11 @@ class StringType(GenericPage):
             dset = h5[self.group]
             value = np.array(value, dtype=dset.dtype)[0]
             mask = (dset != value)
-            if mask.any():
-                new = np.compress(mask, dset[:], axis=0)
-                dset.resize(len(new), axis=0)
-                dset[:] = new
-            else:
+            if not mask.any():
                 raise IndexError(f"value not found: {value}")
+            new = np.compress(mask, dset[:], axis=0)
+            dset.resize(len(new), axis=0)
+            dset[:] = new
             self._len = len(dset)
 
     def pop(self, index):
@@ -1037,7 +1029,7 @@ class MixedType(GenericPage):
 
     def extend(self, values):
         if not isinstance(values, (list, tuple, np.ndarray)):
-            raise ValueError(f".extend requires an iterable")
+            raise ValueError(".extend requires an iterable")
         if not isinstance(values, np.ndarray):
             values = np.array(values, dtype='O')
 
@@ -1061,32 +1053,30 @@ class MixedType(GenericPage):
         with h5py.File(self.path, READWRITE) as h5:
             dset = h5[self.group]
             result = np.where(dset == value)
-            if result[0]:
-                for grp in [self.group, self.type_group]:
-                    dset = h5[grp]
-                    ix = result[0][0]
-                    data = dset[:]
-                    dset.resize(len(dset)-1, axis=0)
-                    dset[:ix] = data[:ix]
-                    dset[ix:] = data[ix+1:]
-                self._len = len(dset)
-            else:
+            if not result[0]:
                 raise IndexError(f"value not found: {value}")
+            for grp in [self.group, self.type_group]:
+                dset = h5[grp]
+                ix = result[0][0]
+                data = dset[:]
+                dset.resize(len(dset)-1, axis=0)
+                dset[:ix] = data[:ix]
+                dset[ix:] = data[ix+1:]
+            self._len = len(dset)
     
     def remove_all(self, value):  # Column will never call this.
         with h5py.File(self.path, READWRITE) as h5:
             dset = h5[self.group]
             value = np.array(value, dtype=dset.dtype)[0]
             mask = (dset != value)
-            if mask.any():
-                for grp in [self.group, self.type_group]:
-                    dset = h5[grp]
-                    new = np.compress(mask, dset[:], axis=0)
-                    dset.resize(len(new), axis=0)
-                    dset[:] = new
-                    self._len = len(dset)
-            else:
-                raise IndexError(f"value not found: {value}")        
+            if not mask.any():
+                raise IndexError(f"value not found: {value}")
+            for grp in [self.group, self.type_group]:
+                dset = h5[grp]
+                new = np.compress(mask, dset[:], axis=0)
+                dset.resize(len(new), axis=0)
+                dset[:] = new
+                self._len = len(dset)        
 
     def pop(self, index):
         with h5py.File(self.path, READWRITE) as h5:
@@ -1197,8 +1187,7 @@ class SparseType(GenericPage):
                 if index > match_range.stop:
                     break
 
-        match = np.array( [d.get(ix, default_value) for ix in match_range], dtype='O')
-        return match
+        return np.array( [d.get(ix, default_value) for ix in match_range], dtype='O')
             
     def __setitem__(self, index, value):
         raise NotImplementedError()  # TODO

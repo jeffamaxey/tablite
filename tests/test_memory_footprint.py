@@ -20,9 +20,7 @@ def test_recreate_readme_comparison():
     # Let's now use the common and convenient "row" based format:
 
     start = process_time()
-    L = []
-    for _ in range(digits):
-        L.append(tuple([11 for _ in range(10)]))
+    L = [tuple(11 for _ in range(10)) for _ in range(digits)]
     end = process_time()
 
     # go and check taskmanagers memory usage.
@@ -35,7 +33,7 @@ def test_recreate_readme_comparison():
 
     # Let's now use a columnar format instead:
     start = process_time()
-    L = [[11 for i in range(digits)] for _ in range(10)]
+    L = [[11 for _ in range(digits)] for _ in range(10)]
     end = process_time()
 
     # go and check taskmanagers memory usage.

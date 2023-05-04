@@ -48,28 +48,28 @@ class DataTypes(object):
         else:
             return cls._type_codes['pickle']
     
-    def b_none(v):
+    def b_none(self):
         return b"None"
-    def b_bool(v):
-        return bytes(str(v), encoding='utf-8')
-    def b_int(v):
-        return bytes(str(v), encoding='utf-8')
-    def b_float(v):
-        return bytes(str(v), encoding='utf-8')
-    def b_str(v):
-        return v.encode('utf-8')
-    def b_bytes(v):
-        return v
-    def b_datetime(v):
-        return bytes(v.isoformat(), encoding='utf-8')
-    def b_date(v):
-        return bytes(v.isoformat(), encoding='utf-8')
-    def b_time(v):
-        return bytes(v.isoformat(), encoding='utf-8')
-    def b_timedelta(v):
-        return bytes(str(float(v.days + (v.seconds / (24*60*60)))), 'utf-8')
-    def b_pickle(v):
-        return pickle.dumps(v, protocol=0)
+    def b_bool(self):
+        return bytes(str(self), encoding='utf-8')
+    def b_int(self):
+        return bytes(str(self), encoding='utf-8')
+    def b_float(self):
+        return bytes(str(self), encoding='utf-8')
+    def b_str(self):
+        return self.encode('utf-8')
+    def b_bytes(self):
+        return self
+    def b_datetime(self):
+        return bytes(self.isoformat(), encoding='utf-8')
+    def b_date(self):
+        return bytes(self.isoformat(), encoding='utf-8')
+    def b_time(self):
+        return bytes(self.isoformat(), encoding='utf-8')
+    def b_timedelta(self):
+        return bytes(str(float(self.days + self.seconds / (24*60*60))), 'utf-8')
+    def b_pickle(self):
+        return pickle.dumps(self, protocol=0)
         
     bytes_functions = {
         type(None): b_none,
@@ -95,30 +95,30 @@ class DataTypes(object):
             f = cls.b_pickle
         return f(v)
 
-    def _none(v):
+    def _none(self):
         return None
-    def _bool(v):
-        return bool(v.decode('utf-8')=='True')
-    def _int(v):
-        return int(v.decode('utf-8'))
-    def _float(v):
-        return float(v.decode('utf-8'))
-    def _str(v):
-        return v.decode('utf-8')
-    def _bytes(v):
-        return v
-    def _datetime(v):
-        return datetime.fromisoformat(v.decode('utf-8'))
-    def _date(v):
-        return date.fromisoformat(v.decode('utf-8'))
-    def _time(v):
-        return time.fromisoformat(v.decode('utf-8'))
-    def _timedelta(v):
-        days = float(v)
-        seconds = 24 * 60 * 60 * ( float(v) - int( float(v) ) )
+    def _bool(self):
+        return self.decode('utf-8') == 'True'
+    def _int(self):
+        return int(self.decode('utf-8'))
+    def _float(self):
+        return float(self.decode('utf-8'))
+    def _str(self):
+        return self.decode('utf-8')
+    def _bytes(self):
+        return self
+    def _datetime(self):
+        return datetime.fromisoformat(self.decode('utf-8'))
+    def _date(self):
+        return date.fromisoformat(self.decode('utf-8'))
+    def _time(self):
+        return time.fromisoformat(self.decode('utf-8'))
+    def _timedelta(self):
+        days = float(self)
+        seconds = 24 * 60 * 60 * (float(self) - int(float(self)))
         return timedelta(int(days), seconds)
-    def _unpickle(v):
-        return pickle.loads(v)
+    def _unpickle(self):
+        return pickle.loads(self)
     
     type_code_functions = {
         1: _none,
@@ -273,7 +273,7 @@ class DataTypes(object):
 
         if day_first:
             s = iso_string
-            iso_string = "".join((s[6:10], "-", s[3:5], "-", s[0:2], s[10:]))
+            iso_string = "".join((s[6:10], "-", s[3:5], "-", s[:2], s[10:]))
 
         if "," in iso_string:
             iso_string = iso_string.replace(",", ".")
@@ -313,11 +313,7 @@ class DataTypes(object):
         """
         epoch = 0
         if isinstance(value, (datetime)) and isinstance(multiple, timedelta):
-            if value.tzinfo is None:
-                epoch = DataTypes.epoch_no_tz
-            else:
-                epoch = DataTypes.epoch
-        
+            epoch = DataTypes.epoch_no_tz if value.tzinfo is None else DataTypes.epoch
         low = ((value - epoch) // multiple) * multiple
         high = low + multiple
         if up is True:
@@ -361,10 +357,7 @@ class DataTypes(object):
     @staticmethod
     def from_json(v, dtype):
         if v in DataTypes.nones:
-            if dtype is str and v == "":
-                return ""
-            else:
-                return None
+            return "" if dtype is str and v == "" else None
         if dtype is int:
             return int(v)
         elif dtype is str:
@@ -524,9 +517,6 @@ class DataTypes(object):
 
             elif comma_index and dot_index == -1:
                 value = value.replace(',', '.')
-            else:
-                pass
-
             value_set = set(value)
 
             if not value_set.issubset(DataTypes.decimals):
@@ -550,7 +540,7 @@ class DataTypes(object):
                 v_exponent = int(v[e + 1:])
                 return float(f"{v_float_part}e{v_exponent}")
 
-            elif "." in str(float_value) and not "." in value_set:
+            elif "." in str(float_value) and "." not in value_set:
                 # when traversing through Datatype.types,
                 # integer is presumed to have failed for the column,
                 # so we ignore this and turn it into a float...
@@ -580,8 +570,7 @@ class DataTypes(object):
                 return date.fromisoformat(value)
             except ValueError:
                 pattern = "".join(["N" if n in DataTypes.digits else n for n in value])
-                f = DataTypes.date_formats.get(pattern, None)
-                if f:
+                if f := DataTypes.date_formats.get(pattern, None):
                     return f(value)
                 else:
                     raise ValueError()
@@ -604,8 +593,7 @@ class DataTypes(object):
                     dot = len(value)
 
                 pattern = "".join(["N" if n in DataTypes.digits else n for n in value[:dot]])
-                f = DataTypes.datetime_formats.get(pattern, None)
-                if f:
+                if f := DataTypes.datetime_formats.get(pattern, None):
                     return f(value)
                 else:
                     raise ValueError()
@@ -624,10 +612,7 @@ class DataTypes(object):
 
     @classmethod
     def _infer_str(cls, value):
-        if isinstance(value, str):
-            return value
-        else:
-            return str(value)
+        return value if isinstance(value, str) else str(value)
 
     @classmethod
     def _infer_none(cls, value):
@@ -697,9 +682,9 @@ numpy_types = _get_numpy_types()
 
 class Rank(object):
     def __init__(self, *items):
-        self.items = {i:ix for i,ix in zip(items,range(len(items)))}
+        self.items = dict(zip(items,range(len(items))))
         self.ranks = [0 for _ in items]
-        self.items_list = [i for i in items]
+        self.items_list = list(items)
     
     def match(self, k):  # k+=1
         ix = self.items[k]

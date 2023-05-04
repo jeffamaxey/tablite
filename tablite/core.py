@@ -61,9 +61,8 @@ class Table(object):
         self.group = f"/table/{self.key}"
         self._columns = {}  # references for virtual datasets that behave like lists.
         if _create:
-            if config is not None:
-                if not isinstance(config, str):
-                    raise TypeError("expected config as utf-8 encoded json")
+            if config is not None and not isinstance(config, str):
+                raise TypeError("expected config as utf-8 encoded json")
             mem.create_table(key=key, save=save, config=config)  # attrs. 'columns'
         self._saved = save
     
@@ -172,7 +171,7 @@ class Table(object):
             keys = (keys, )
         if len(keys)==1 and all(isinstance(i,tuple) for i in keys):
             keys = keys[0]           
-        
+
         slices = [i for i in keys if isinstance(i, slice)]
         if len(slices)>1:
             raise KeyError(f"multiple slices is not accepted: {slices}")
@@ -184,13 +183,10 @@ class Table(object):
                 raise KeyError(f"keys not found: {key_errors}")
         else:  # e.g. tbl[:10]
             cols = self.columns
-                
+
         if len(cols)==1:  # e.g. tbl['a'] or tbl['a'][:10]
             col = self._columns[cols[0]]
-            if slices:
-                return col[slices[0]]
-            else:
-                return col
+            return col[slices[0]] if slices else col
         elif slices:
             slc = slices[0]
             t = Table()
@@ -239,10 +235,7 @@ class Table(object):
             return True
         if self.columns != __o.columns:
             return False
-        for name, col in self._columns.items():
-            if col != __o._columns[name]:
-                return False
-        return True
+        return all(col == __o._columns[name] for name, col in self._columns.items())
 
     def __add__(self,other):
         """
@@ -382,18 +375,17 @@ class Table(object):
                 raise ValueError(f"format not recognised: {args}")
 
         if kwargs:
-            if isinstance(kwargs, dict):
-                if all(isinstance(v, (list, tuple)) for v in kwargs.values()):
-                    for k,v in kwargs.items():
-                        col = self._columns[k]
-                        col.extend(v)
-                else:
-                    for k,v in kwargs.items():
-                        col = self._columns[k]
-                        col.append(v)
-            else:
+            if not isinstance(kwargs, dict):
                 raise ValueError(f"format not recognised: {kwargs}")
-        
+
+            if all(isinstance(v, (list, tuple)) for v in kwargs.values()):
+                for k,v in kwargs.items():
+                    col = self._columns[k]
+                    col.extend(v)
+            else:
+                for k,v in kwargs.items():
+                    col = self._columns[k]
+                    col.append(v)
         return
 
     def add_columns(self, *names):
@@ -405,8 +397,6 @@ class Table(object):
             raise TypeError()
         if name in self.columns:
             raise ValueError(f"{name} already in {self.columns}")
-        if not data:
-            pass
         self.__setitem__(name,data)
 
     def stack(self, other):
@@ -420,7 +410,7 @@ class Table(object):
         """
         if not isinstance(other, Table):
             raise TypeError(f"stack only works for Table, not {type(other)}")
-        
+
         t = self.copy()
         for name , col2 in other._columns.items():
             if name in t.columns:
@@ -431,12 +421,11 @@ class Table(object):
                 t[name] = col2
 
         for name, col in t._columns.items():
-            if name not in other.columns:
-                if len(other) > 0:
-                    if len(self) > 0:
-                        col.extend([None]*len(other))
-                    else:
-                        t[name] = [None]*len(other)
+            if name not in other.columns and len(other) > 0:
+                if len(self) > 0:
+                    col.extend([None]*len(other))
+                else:
+                    t[name] = [None]*len(other)
         return t
 
     def types(self):
@@ -472,9 +461,16 @@ class Table(object):
                 column_types[name] = 'mixed'
             dots = len("...") if split_after is not None else 0
             widths[name] = max(
-                [len(column_types[name]), len(name), dots] +\
-                [len(str(v)) if not isinstance(v,str) else len(str(v)) for v in col] +\
-                [len(str(None)) if len(col)!= len(self) else 0]
+                (
+                    (
+                        [len(column_types[name]), len(name), dots]
+                        + [
+                            len(str(v)) if isinstance(v, str) else len(str(v))
+                            for v in col
+                        ]
+                    )
+                    + [len(str(None)) if len(col) != len(self) else 0]
+                )
             )
             column_lengths.add(len(col))
 
@@ -495,12 +491,12 @@ class Table(object):
             s.append("|" + "|".join([adjust(v, widths[n]) for v, n in zip(row, names)]) + "|")
             if ix == split_after:
                 s.append("|" + "|".join([adjust("...", widths[n]) for _, n in zip(row, names)]) + "|")
-                
+
         s.append("+" + "+".join(["=" * widths[h] for h in names]) + "+")
 
         if len(column_lengths)!=1:
             s.append("Warning: Columns have different lengths. None is used as fill value.")
-        
+
         return "\n".join(s)
 
     def show(self, *args, blanks=None):
@@ -512,7 +508,7 @@ class Table(object):
             print("Empty Table")
             return
 
-        row_count_tags = ['#', '~', '*'] 
+        row_count_tags = ['#', '~', '*']
         cols = set(self.columns)
         for n,tag in itertools.product(range(1,6), row_count_tags):
             if n*tag not in cols:
@@ -524,8 +520,7 @@ class Table(object):
         if args:
             for arg in args:
                 if isinstance(arg, slice):
-                    ro = range(*arg.indices(len(self)))
-                    if len(ro)!=0:
+                    if ro := range(*arg.indices(len(self))):
                         t[tag] = [f"{i:,}" for i in ro]  # add rowcounts as first column.
                         for name,col in self._columns.items():
                             t[name] = col[arg]  # copy to match slices
@@ -543,7 +538,7 @@ class Table(object):
             split_after = 6
             t[tag] = [f"{i:,}".rjust(j) for i in range(7)] + [f"{i:,}".rjust(j) for i in range(n-7, n)]
             for name, col in self._columns.items():
-                t[name] = [i for i in col[:7]] + [i for i in col[-7:]] 
+                t[name] = list(col[:7]) + list(col[-7:]) 
 
         print(t.to_ascii(blanks=blanks,row_counts=tag, split_after=split_after))
 
@@ -556,15 +551,19 @@ class Table(object):
         if not self.columns:
             return f"{start}<tr>Empty Table</tr>{end}"
 
-        row_count_tags = ['#', '~', '*'] 
+        row_count_tags = ['#', '~', '*']
         cols = set(self.columns)
         for n,tag in itertools.product(range(1,6), row_count_tags):
             if n*tag not in cols:
                 tag = n*tag
                 break
 
-        html = ["<tr>" + f"<th>{tag}</th>" +"".join( f"<th>{cn}</th>" for cn in self.columns) + "</tr>"]
-        
+        html = [
+            f"<tr><th>{tag}</th>"
+            + "".join(f"<th>{cn}</th>" for cn in self.columns)
+            + "</tr>"
+        ]
+
         column_types = {}
         column_lengths = set()
         for name,col in self._columns.items():
@@ -576,24 +575,44 @@ class Table(object):
                 column_types[name] = 'mixed'
             column_lengths.add(len(col))
 
-        html.append("<tr>" + f"<th>row</th>" +"".join( f"<th>{column_types[name]}</th>" for name in self.columns) + "</tr>")
+        html.append(
+            f"<tr><th>row</th>"
+            + "".join(f"<th>{column_types[name]}</th>" for name in self.columns)
+            + "</tr>"
+        )
 
         if len(self)<20:
-            for ix, row in enumerate(self.rows):
-                html.append( "<tr>" + f"<td>{ix}</td>" + "".join(f"<td>{v}</td>" for v in row) + "</tr>")
+            html.extend(
+                f"<tr><td>{ix}</td>"
+                + "".join(f"<td>{v}</td>" for v in row)
+                + "</tr>"
+                for ix, row in enumerate(self.rows)
+            )
         else:
             t = Table()
             for name,col in self._columns.items():
-                t[name] = [i for i in col[:7]] + [i for i in col[-7:]] 
-            
+                t[name] = list(col[:7]) + list(col[-7:]) 
+
             c = len(self)-7
             for ix, row in enumerate(t.rows):
                 if ix < 7:
-                    html.append( "<tr>" + f"<td>{ix}</td>" + "".join(f"<td>{v}</td>" for v in row) + "</tr>")
+                    html.append(
+                        f"<tr><td>{ix}</td>"
+                        + "".join(f"<td>{v}</td>" for v in row)
+                        + "</tr>"
+                    )
                 if ix == 7: 
-                    html.append( "<tr>" + f"<td>...</td>" + "".join(f"<td>...</td>" for _ in self._columns) + "</tr>")
+                    html.append(
+                        f"<tr><td>...</td>"
+                        + "".join("<td>...</td>" for _ in self._columns)
+                        + "</tr>"
+                    )
                 if ix >= 7:
-                    html.append( "<tr>" + f"<td>{c}</td>" + "".join(f"<td>{v}</td>" for v in row) + "</tr>")
+                    html.append(
+                        f"<tr><td>{c}</td>"
+                        + "".join(f"<td>{v}</td>" for v in row)
+                        + "</tr>"
+                    )
                     c += 1
 
         warning = "Warning: Columns have different lengths. None is used as fill value." if len(column_lengths)!=1 else ""
@@ -619,8 +638,7 @@ class Table(object):
         """ copy data from a Table into clipboard. """
         try:
             s = ["\t".join([f"{name}" for name in self.columns])]
-            for row in self.rows:
-                s.append("\t".join((str(i) for i in row)))
+            s.extend("\t".join((str(i) for i in row)) for row in self.rows)
             s = "\n".join(s)
             pyperclip.copy(s)
         except MemoryError:
@@ -646,21 +664,21 @@ class Table(object):
         start_on: integer: first row (typically 0 or 1)
         """
         if slice_ is None:
-            slice_  = slice(0, len(self))      
+            slice_  = slice(0, len(self))
         assert isinstance(slice_, slice)
-        
+
         if columns is None:
-            columns = self.columns 
+            columns = self.columns
         if not isinstance(columns, list):
             raise TypeError("expected columns as list of strings")
-        
+
         column_selection, own_cols = [], set(self.columns)
         for name in columns:
             if name in own_cols:
                 column_selection.append(name)
             else:
                 raise ValueError(f"column({name}) not found")
-        
+
         cols = {}
 
         if row_count is not None:
@@ -670,8 +688,7 @@ class Table(object):
             new_name = unique_name(name, list_of_names=list(cols.keys()))
             col = self._columns[name]
             cols[new_name] = col[slice_].tolist()  # pure python objects. No numpy.
-        d = {"columns": cols, "total_rows": len(self)}
-        return d
+        return {"columns": cols, "total_rows": len(self)}
 
     def as_json_serializable(self, row_count="row id", columns=None, slice_=None):
         args = row_count, columns, slice_
@@ -701,16 +718,14 @@ class Table(object):
         """
         if isinstance(path, str):
             path = pathlib.Path(path)
-        
+
         total = ":,".format(len(self.columns) * len(self))
         print(f"writing {total} records to {path}")
 
         with h5py.File(path, 'a') as f:
             with _tqdm(total=len(self.columns), unit='columns') as pbar:
-                n = 0
-                for name, mc in self.columns.values():
+                for n, (name, mc) in enumerate(self.columns.values(), start=1):
                     f.create_dataset(name, data=mc[:])  # stored in hdf5 as '/name'
-                    n += 1
                     pbar.update(n)
         print(f"writing {path} to HDF5 done")
 
@@ -751,13 +766,13 @@ class Table(object):
             columns.append(definition)
 
         create_table = create_table.format(prefix, self.key, ", ".join(columns))
-        
-        # return create_table
-        row_inserts = []
-        for row in self.rows:
-            row_inserts.append(str(tuple([i if i is not None else 'NULL' for i in row])))
-        row_inserts = f"INSERT INTO {prefix}{self.key} VALUES " + ",".join(row_inserts) 
-        return "begin; {}; {}; commit;".format(create_table, row_inserts)
+
+        row_inserts = [
+            str(tuple(i if i is not None else 'NULL' for i in row))
+            for row in self.rows
+        ]
+        row_inserts = f"INSERT INTO {prefix}{self.key} VALUES " + ",".join(row_inserts)
+        return f"begin; {create_table}; {row_inserts}; commit;"
 
     def export(self, path):
         if isinstance(path,str):
@@ -828,10 +843,10 @@ class Table(object):
 
         if not isinstance(strip_leading_and_tailing_whitespace, bool):
             raise TypeError()
-        
+
         if columns is None:
             sample = get_headers(path)
-            
+
             if "is_empty" in sample:
                 return Table()
 
@@ -839,8 +854,6 @@ class Table(object):
                 columns = {k:'f' for k in sample[path.name][0]}
             elif sheet is not None:
                 columns = sample[sheet][0]
-            else:
-                pass  # let it fail later.
         if not first_row_has_headers:
             columns = {str(i):'f' for i in range(len(columns))}
 
@@ -880,10 +893,7 @@ class Table(object):
         tbl = self.__getitem__(*keys)
         g = tbl.rows if isinstance(tbl, Table) else iter(tbl)
         for ix, key in enumerate(g):
-            if isinstance(key, list):
-                key = tuple(key)
-            else:
-                key = (key,)
+            key = tuple(key) if isinstance(key, list) else (key, )
             idx[key].add(ix)
         return idx
 
@@ -909,7 +919,7 @@ class Table(object):
         for expression in expressions:
             if not isinstance(expression, dict):
                 raise TypeError(f"invalid expression: {expression}")
-            if not len(expression)==3:
+            if len(expression) != 3:
                 raise ValueError(f"expected 3 items, got {expression}")
             x = {'column1', 'column2', 'criteria', 'value1', 'value2'}
             if not set(expression.keys()).issubset(x):
@@ -917,34 +927,34 @@ class Table(object):
             if expression['criteria'] not in filter_ops:
                 raise ValueError(f"criteria missing from {expression}")
 
-            c1 = expression.get('column1',None) 
+            c1 = expression.get('column1',None)
             if c1 is not None and c1 not in self.columns: 
                 raise ValueError(f"no such column: {c1}")
             v1 = expression.get('value1', None)
             if v1 is not None and c1 is not None:
                 raise ValueError("filter can only take 1 left expr element. Got 2.")
 
-            c2 = expression.get('column2',None) 
+            c2 = expression.get('column2',None)
             if c2 is not None and c2 not in self.columns: 
                 raise ValueError(f"no such column: {c2}")
             v2 = expression.get('value2', None)
             if v2 is not None and c2 is not None:
                 raise ValueError("filter can only take 1 right expression element. Got 2.")
-               
+
         if not isinstance(filter_type, str):
             raise TypeError()
-        if not filter_type in {'all', 'any'}:
+        if filter_type not in {'all', 'any'}:
             raise ValueError(f"filter_type: {filter_type} not in ['all', 'any']")
 
         # the results are to be gathered here:
         arr = np.zeros(shape=(len(expressions), len(self)), dtype=bool)
         shm = shared_memory.SharedMemory(create=True, size=arr.nbytes)
         _ = np.ndarray(arr.shape, dtype=arr.dtype, buffer=shm.buf)
-        
+
         # the task manager enables evaluation of a column per core,
         # which is assembled in the shared array.
         max_task_size = math.floor(SINGLE_PROCESSING_LIMIT / len(self.columns))  # 1 million fields per core (best guess!)
-        
+
         filter_tasks = []
         for ix, expression in enumerate(expressions):
             for step in range(0, len(self), max_task_size):
@@ -985,37 +995,32 @@ class Table(object):
                 table_true = tmp_true
             elif len(tmp_true):
                 table_true += tmp_true
-            else:
-                pass
-                
             tmp_false = Table.load(mem.path, key=task.kwargs['false_key'])
             if table_false is None:
                 table_false = tmp_false
             elif len(tmp_false):
                 table_false += tmp_false
-            else:
-                pass
         return table_true, table_false
     
-    def sort_index(self, sort_mode='excel', **kwargs):  
+    def sort_index(self, sort_mode='excel', **kwargs):
         """ 
         helper for methods `sort` and `is_sorted` 
         sort_mode: str: "alphanumeric", "unix", or, "excel"
         kwargs: sort criteria. See Table.sort()
         """
-        logging.info(f"Table.sort_index running 1 core")  # TODO: This is single core code.
+        logging.info("Table.sort_index running 1 core")
 
         if not isinstance(kwargs, dict):
             raise ValueError("Expected keyword arguments, did you forget the ** in front of your dict?")
         if not kwargs:
             kwargs = {c: False for c in self.columns}
-        
+
         for k, v in kwargs.items():
             if k not in self.columns:
                 raise ValueError(f"no column {k}")
             if not isinstance(v, bool):
                 raise ValueError(f"{k} was mapped to {v} - a non-boolean")
-        
+
         if sort_mode not in sortation.modes:
             raise ValueError(f"{sort_mode} not in list of sort_modes: {list(sortation.Sortable.modes.modes)}")
 
@@ -1047,13 +1052,11 @@ class Table(object):
             if not all(isinstance(i,int) for i in index):
                 raise TypeError
 
-        if len(self) * len(self.columns) < SINGLE_PROCESSING_LIMIT :  # the task is so small that multiprocessing doesn't make sense.
+        if len(self) * len(self.columns) < SINGLE_PROCESSING_LIMIT:  # the task is so small that multiprocessing doesn't make sense.
             t = Table()
             for col_name, col in self._columns.items():  # this LOOP can be done with TaskManager
                 data = list(col[:])
                 t.add_column(col_name, data=[data[ix] for ix in index])
-            return t
-        
         else:
             arr = np.zeros(shape=(len(self), ), dtype=np.int64)
             shm = shared_memory.SharedMemory(create=True, size=arr.nbytes)  # the co_processors will read this.
@@ -1075,13 +1078,14 @@ class Table(object):
 
             table_key = mem.new_id('/table')
             mem.create_table(key=table_key, columns=columns_refs)
-            
+
             shm.close()
             shm.unlink()
-            t = Table.load(path=mem.path, key=table_key)
-            return t            
+            t = Table.load(path=mem.path, key=table_key)            
 
-    def sort(self, sort_mode='excel', **kwargs):  
+        return t            
+
+    def sort(self, sort_mode='excel', **kwargs):
         """ Perform multi-pass sorting with precedence given order of column names.
         sort_mode: str: "alphanumeric", "unix", or, "excel"
         kwargs: 
@@ -1092,14 +1096,13 @@ class Table(object):
         Table.sort('A'=False) means sort by 'A' in ascending order.
         Table.sort('A'=True, 'B'=False) means sort 'A' in descending order, then (2nd priority) sort B in ascending order.
         """
-        if len(self) * len(self.columns) < SINGLE_PROCESSING_LIMIT :  # the task is so small that multiprocessing doesn't make sense.
+        if len(self) * len(self.columns) < SINGLE_PROCESSING_LIMIT:  # the task is so small that multiprocessing doesn't make sense.
             sorted_index = self.sort_index(sort_mode=sort_mode, **kwargs) 
-            
+
             t = Table()
             for col_name, col in self._columns.items():  # this LOOP can be done with TaskManager
                 data = list(col[:])
                 t.add_column(col_name, data=[data[ix] for ix in sorted_index])
-            return t
         else:
             arr = np.zeros(shape=(len(self), ), dtype=np.int64)
             shm = shared_memory.SharedMemory(create=True, size=arr.nbytes)  # the co_processors will read this.
@@ -1121,22 +1124,21 @@ class Table(object):
 
             table_key = mem.new_id('/table')
             mem.create_table(key=table_key, columns=columns_refs)
-            
+
             shm.close()
             shm.unlink()
-            t = Table.load(path=mem.path, key=table_key)
-            return t            
+            t = Table.load(path=mem.path, key=table_key)            
 
-    def is_sorted(self, **kwargs):  
+        return t            
+
+    def is_sorted(self, **kwargs):
         """ Performs multi-pass sorting check with precedence given order of column names.
         **kwargs: optional: sort criteria. See Table.sort()
         :return bool
         """
-        logging.info(f"Table.is_sorted running 1 core")  # TODO: This is single core code.
-        sorted_index = self.sort_index(**kwargs) 
-        if any(ix != i for ix, i in enumerate(sorted_index)):
-            return False
-        return True
+        logging.info("Table.is_sorted running 1 core")
+        sorted_index = self.sort_index(**kwargs)
+        return all(ix == i for ix, i in enumerate(sorted_index))
 
     def _mp_compress(self, mask):
         """
@@ -1176,36 +1178,31 @@ class Table(object):
         t = Table.load(path=mem.path, key=table_key)
         return t
 
-    def all(self, **kwargs):  
+    def all(self, **kwargs):
         """
         returns Table for rows where ALL kwargs match
         :param kwargs: dictionary with headers and values / boolean callable
         """
         if not isinstance(kwargs, dict):
             raise TypeError("did you forget to add the ** in front of your dict?")
-        if not all(k in self.columns for k in kwargs):
+        if any(k not in self.columns for k in kwargs):
             raise ValueError(f"Unknown column(s): {[k for k in kwargs if k not in self.columns]}")
 
         ixs = None
         for k, v in kwargs.items():
             col = self._columns[k]
             if ixs is None:  # first header generates base set.
-                if callable(v):
-                    ix2 = {ix for ix, i in enumerate(col) if v(i)}
-                else:
-                    ix2 = {ix for ix, i in enumerate(col) if v == i}
-
-            else:  # remaining headers reduce the base set.
-                if callable(v):
-                    ix2 = {ix for ix in ixs if v(col[ix])}
-                else:
-                    ix2 = {ix for ix in ixs if v == col[ix]}
-
-            if not isinstance(ixs, set):
-                ixs = ix2
+                ix2 = (
+                    {ix for ix, i in enumerate(col) if v(i)}
+                    if callable(v)
+                    else {ix for ix, i in enumerate(col) if v == i}
+                )
+            elif callable(v):
+                ix2 = {ix for ix in ixs if v(col[ix])}
             else:
-                ixs = ixs.intersection(ix2)
+                ix2 = {ix for ix in ixs if v == col[ix]}
 
+            ixs = ixs.intersection(ix2) if isinstance(ixs, set) else ix2
             if not ixs:  # There are no matches.
                 break
 
@@ -1216,7 +1213,7 @@ class Table(object):
                 t[col_name] = [data[i] for i in ixs]
             return t
         else:
-            mask =  np.array([True if i in ixs else False for i in range(len(self))],dtype=bool)
+            mask = np.array([i in ixs for i in range(len(self))], dtype=bool)
             return self._mp_compress(mask)
 
     def any(self, **kwargs):  
@@ -1246,7 +1243,7 @@ class Table(object):
             mask =  np.array([i in ixs for i in range(len(self))],dtype=bool)
             return self._mp_compress(mask)
 
-    def groupby(self, keys, functions):  # TODO: This is slow single core code.
+    def groupby(self, keys, functions):    # TODO: This is slow single core code.
         """
         rows: column names for grouping as rows.
         columns: column names for grouping as columns.
@@ -1273,7 +1270,7 @@ class Table(object):
         if not isinstance(functions, list):
             raise TypeError(f"Expected functions to be a list of tuples. Got {type(functions)}")
 
-        if not all(len(i) == 2 for i in functions):
+        if any(len(i) != 2 for i in functions):
             raise ValueError(f"Expected each tuple in functions to be of length 2. \nGot {functions}")
 
         if not all(isinstance(a, str) for a, _ in functions):
@@ -1288,7 +1285,7 @@ class Table(object):
             else:
                 plural = f"the functions {L} are not in GroupBy.functions"
                 raise ValueError(plural)
-        
+
         # 1. Aggregate data.
         aggregation_functions = defaultdict(dict)
         cols = keys + [col_name for col_name,_ in functions]
@@ -1298,14 +1295,14 @@ class Table(object):
                 seen.add(c)
                 L.append(c)
         for row in self.__getitem__(*L).rows:
-            d = {col_name: value for col_name,value in zip(L, row)}
-            key = tuple([d[k] for k in keys])
+            d = dict(zip(L, row))
+            key = tuple(d[k] for k in keys)
             agg_functions = aggregation_functions.get(key)
             if not agg_functions:
                 aggregation_functions[key] = agg_functions =[(col_name, f()) for col_name, f in functions]
             for col_name, f in agg_functions:
                 f.update(d[col_name])
-        
+
         # 2. make dense table.
         cols = [[] for _ in cols]
         for key_tuple, funcs in aggregation_functions.items():
@@ -1313,12 +1310,12 @@ class Table(object):
                 cols[ix].append(key_value)
             for ix, (_, f) in enumerate(funcs,start=len(keys)):
                 cols[ix].append(f.value)
-        
+
         new_names = keys + [f"{f.__name__}({col_name})" for col_name,f in functions]
         result = Table()
-        for ix, (col_name, data) in enumerate(zip(new_names, cols)):
+        for col_name, data in zip(new_names, cols):
             revised_name = unique_name(col_name, result.columns)
-            result[revised_name] = data            
+            result[revised_name] = data
         return result
 
     def pivot(self, rows, columns, functions, values_as_rows=True):
@@ -1326,7 +1323,7 @@ class Table(object):
             rows = [rows]
         if not all(isinstance(i,str) for i in rows)            :
             raise TypeError(f"Expected rows as a list of column names, not {[i for i in rows if not isinstance(i,str)]}")
-        
+
         if isinstance(columns, str):
             columns = [columns]
         if not all(isinstance(i,str) for i in columns):
@@ -1334,30 +1331,30 @@ class Table(object):
 
         if not isinstance(values_as_rows, bool):
             raise TypeError(f"expected sum_on_rows as boolean, not {type(values_as_rows)}")
-        
-        keys = rows + columns 
+
+        keys = rows + columns
         assert isinstance(keys, list)
 
         grpby = self.groupby(keys, functions)
 
         if len(grpby) == 0:  # return empty table. This must be a test?
             return Table()
-        
+
         # split keys to determine grid dimensions
-        row_key_index = {}  
+        row_key_index = {}
         col_key_index = {}
 
         r = len(rows)
         c = len(columns)
         g = len(functions)
-        
+
         records = defaultdict(dict)
 
         for row in grpby.rows:
             row_key = tuple(row[:r])
             col_key = tuple(row[r:r+c])
             func_key = tuple(row[r+c:])
-            
+
             if row_key not in row_key_index:
                 row_key_index[row_key] = len(row_key_index)  # Y
 
@@ -1366,19 +1363,18 @@ class Table(object):
 
             rix = row_key_index[row_key]
             cix = col_key_index[col_key]
-            if cix in records:
-                if rix in records[cix]:
-                    raise ValueError("this should be empty.")
+            if cix in records and rix in records[cix]:
+                raise ValueError("this should be empty.")
             records[cix][rix] = func_key
-        
+
         result = Table()
-        
+
         if values_as_rows:  # ---> leads to more rows.
             # first create all columns left to right
 
             n = r + 1  # rows keys + 1 col for function values.
             cols = [[] for _ in range(n)]
-            for row, ix in row_key_index.items():
+            for row in row_key_index:
                 for (col_name, f)  in functions:
                     cols[-1].append(f"{f.__name__}({col_name})")
                     for col_ix, v in enumerate(row):
@@ -1389,7 +1385,7 @@ class Table(object):
                 result[col_name] = values
             col_length = len(cols[0])
             cols.clear()
-            
+
             # then populate the sparse matrix.
             for col_key, c in col_key_index.items():
                 col_name = "(" + ",".join([f"{col_name}={value}" for col_name, value in zip(columns, col_key)]) + ")"
@@ -1399,23 +1395,23 @@ class Table(object):
                     for ix, f in enumerate(funcs):
                         L[g*r+ix] = f
                 result[col_name] = L
-                
+
         else:  # ---> leads to more columns.
             n = r
             cols = [[] for _ in range(n)]
             for row in row_key_index:
                 for col_ix, v in enumerate(row):
                     cols[col_ix].append(v)  # write key columns.
-            
+
             for col_name, values in zip(rows, cols):
                 result[col_name] = values
-            
+
             col_length = len(row_key_index)
 
             # now populate the sparse matrix.
             for col_key, c in col_key_index.items():  # select column.
                 cols, names = [],[]
-                
+
                 for f,v in zip(functions, func_key):
                     agg_col, func = f
                     col_name = f"{func.__name__}(" + ",".join([agg_col] + [f"{col_name}={value}" for col_name, value in zip(columns, col_key)]) + ")"
@@ -1521,26 +1517,25 @@ class Table(object):
 
         with TaskManager(cpu_count=min(psutil.cpu_count(), len(tasks))) as tm:
             results = tm.execute(tasks)
-            
+
             if any(i is not None for i in results):
                 for err in results:
                     if err is not None:
                         print(err)
                 raise Exception("multiprocessing error.")
-            
+
         with h5py.File(mem.path, 'r+') as h5:
             table_key = mem.new_id('/table')
             dset = h5.create_dataset(name=f"/table/{table_key}", dtype=h5py.Empty('f'))
             dset.attrs['columns'] = json.dumps(columns_refs)  
             dset.attrs['saved'] = False
-        
+
         left_shm.close()
         left_shm.unlink()
         right_shm.close()
         right_shm.unlink()
 
-        t = Table.load(path=mem.path, key=table_key)
-        return t            
+        return Table.load(path=mem.path, key=table_key)            
 
     def left_join(self, other, left_keys, right_keys, left_columns=None, right_columns=None):  # TODO: This is slow single core code.
         """
@@ -1671,7 +1666,7 @@ class Table(object):
         else:  # use multi processing
             return self._mp_join(other, LEFT, RIGHT, left_columns, right_columns)
         
-    def lookup(self, other, *criteria, all=True):  # TODO: This is slow single core code.
+    def lookup(self, other, *criteria, all=True):    # TODO: This is slow single core code.
         """ function for looking up values in `other` according to criteria in ascending order.
         :param: other: Table sorted in ascending search order.
         :param: criteria: Each criteria must be a tuple with value comparisons in the form:
@@ -1712,9 +1707,7 @@ class Table(object):
         for left, op, right in criteria:
             left_criteria.add(left)
             right_criteria.add(right)
-            if callable(op):
-                pass  # it's a custom function.
-            else:
+            if not callable(op):
                 op = ops.get(op, None)
                 if not callable(op):
                     raise ValueError(f"{op} not a recognised operator for comparison.")
@@ -1738,14 +1731,14 @@ class Table(object):
 
         for row1 in _tqdm(left.rows, total=self.__len__()):
             row1_tup = tuple(row1)
-            row1d = {name: value for name, value in zip(left_columns, row1)}
+            row1d = dict(zip(left_columns, row1))
             row1_hash = hash(row1_tup)
 
-            match_found = True if row1_hash in lru_cache else False
+            match_found = row1_hash in lru_cache
 
             if not match_found:  # search.
                 for row2ix, row2 in enumerate(right.rows):
-                    row2d = {name: value for name, value in zip(right_columns, row2)}
+                    row2d = dict(zip(right_columns, row2))
 
                     evaluations = {op(row1d.get(left, left), row2d.get(right, right)) for op, left, right in functions}
                     # The evaluations above does a neat trick:
@@ -1762,7 +1755,7 @@ class Table(object):
 
             if not match_found:  # no match found.
                 lru_cache[row1_hash] = None
-            
+
             results.append(lru_cache[row1_hash])
 
         result = self.copy()
@@ -1792,7 +1785,7 @@ class Table(object):
                 errs = tm.execute(tasks)
                 if any(errs):
                     raise Exception(f"multiprocessing error. {[e for e in errs if e]}")
-            
+
             # 4. close the share memory and deallocate
             right_shm.close()
             right_shm.unlink()
@@ -1804,7 +1797,7 @@ class Table(object):
                 columns.update(columns_refs)
                 dset.attrs['columns'] = json.dumps(columns)  
                 dset.attrs['saved'] = False
-            
+
             # 6. reload the result table
             t = Table.load(path=mem.path, key=result.key)
             return t
@@ -1813,10 +1806,7 @@ class Table(object):
 class Column(object):
     def __init__(self, data=None, key=None) -> None:
 
-        if key is None:
-            self.key = mem.new_id('/column')
-        else:
-            self.key = key            
+        self.key = mem.new_id('/column') if key is None else key
         self.group = f"/column/{self.key}"
         if key is None:
             self._len = 0
@@ -1843,7 +1833,7 @@ class Column(object):
         return Column(key=key)
     
     def __iter__(self):
-        return (v for v in self.__getitem__())
+        return iter(self.__getitem__())
 
     def __getitem__(self, item=None):
         if isinstance(item, int):
@@ -1854,13 +1844,10 @@ class Column(object):
             slc = item
         if not isinstance(slc, slice):
             raise TypeError(f"expected slice or int, got {type(item)}")
-        
+
         result = mem.get_data(self.group, slc)
 
-        if isinstance(item, int) and len(result)==1:
-            return result[0]
-        else:
-            return result
+        return result[0] if isinstance(item, int) and len(result)==1 else result
 
     def clear(self):
         old_pages = mem.get_pages(self.group)
@@ -1958,22 +1945,21 @@ class Column(object):
         if isinstance(key, int):
             if isinstance(value, (list,tuple)):
                 raise TypeError(f"your key is an integer, but your value is a {type(value)}. Did you mean to insert? F.x. [{key}:{key+1}] = {value} ?")
-            if -self._len-1 < key < self._len:
-                key = self._len + key if key < 0 else key
-                pages = mem.get_pages(self.group)
-                ix,start,_,page = pages.get_page_by_index(key)
-                if mem.get_ref_count(page) == 1:
-                    page[key-start] = value
-                else:
-                    data = page[:].tolist()
-                    data[key-start] = value
-                    new_page = Page(data)
-                    new_pages = pages[:]
-                    new_pages[ix] = new_page
-                    self._len = mem.create_virtual_dataset(self.group, pages_before=pages, pages_after=new_pages)
-            else:
+            if not -self._len - 1 < key < self._len:
                 raise IndexError("list assignment index out of range")
 
+            key = self._len + key if key < 0 else key
+            pages = mem.get_pages(self.group)
+            ix,start,_,page = pages.get_page_by_index(key)
+            if mem.get_ref_count(page) == 1:
+                page[key-start] = value
+            else:
+                data = page[:].tolist()
+                data[key-start] = value
+                new_page = Page(data)
+                new_pages = pages[:]
+                new_pages[ix] = new_page
+                self._len = mem.create_virtual_dataset(self.group, pages_before=pages, pages_after=new_pages)
         elif isinstance(key, slice):
             start,stop,step = key.indices(self._len)
             if key.start == key.stop == None and key.step in (None,1): 
@@ -2025,10 +2011,10 @@ class Column(object):
                 else:
                     raise TypeError
                 self._len = mem.create_virtual_dataset(self.group, pages_before=before, pages_after=after)
-                
-            elif key.step == None and key.start != None and key.stop != None:  # L[3:5] = [1,2,3]
+
+            elif key.step is None and key.start != None and key.stop != None:  # L[3:5] = [1,2,3]
                 # documentation: new = old[:start] + list(values) + old[stop:] 
-                
+
                 stop = max(start,stop)  #  one of python's archaic rules.
 
                 before = mem.get_pages(self.group)
@@ -2050,7 +2036,7 @@ class Column(object):
                 seq_size = len(seq)
                 if len(value) > seq_size:
                     raise ValueError(f"attempt to assign sequence of size {len(value)} to extended slice of size {seq_size}")
-                
+
                 # documentation: See also test_slice_rules.py/MyList for details
                 before = mem.get_pages(self.group)
                 new = mem.get_data(self.group, slice(None)).tolist()  # new = old[:]  # cheap shallow pointer copy in case anything goes wrong.
@@ -2067,20 +2053,19 @@ class Column(object):
 
     def __delitem__(self, key):
         if isinstance(key, int):
-            if -self._len-1 < key < self._len:
-                before = mem.get_pages(self.group)
-                after = before[:]
-                ix,start,_,page = before.get_page_by_index(key)
-                if mem.get_ref_count(page) == 1:
-                    del page[key-start]
-                else:
-                    data = mem.get_data(page.group)
-                    mask = np.ones(shape=data.shape)
-                    new_data = np.compress(mask, data,axis=0)
-                    after[ix] = Page(new_data)
-            else:
+            if not -self._len - 1 < key < self._len:
                 raise IndexError("list assignment index out of range")
 
+            before = mem.get_pages(self.group)
+            after = before[:]
+            ix,start,_,page = before.get_page_by_index(key)
+            if mem.get_ref_count(page) == 1:
+                del page[key-start]
+            else:
+                data = mem.get_data(page.group)
+                mask = np.ones(shape=data.shape)
+                new_data = np.compress(mask, data,axis=0)
+                after[ix] = Page(new_data)
             self._len = mem.create_virtual_dataset(self.group, pages_before=before, pages_after=after)
 
         elif isinstance(key, slice):
@@ -2094,7 +2079,7 @@ class Column(object):
             elif key.stop != None and key.start == key.step == None:  # del L[:3] 
                 after = before.getslice(stop, self._len)
                 self._len = mem.create_virtual_dataset(self.group, pages_before=before, pages_after=after)
-            elif key.step == None and key.start != None and key.stop != None:  # del L[3:5]
+            elif key.step is None and key.start != None and key.stop != None:  # del L[3:5]
                 after = before.getslice(0, start) + before.getslice(stop, self._len)
                 self._len = mem.create_virtual_dataset(self.group, pages_before=before, pages_after=after)
             elif key.step != None:
@@ -2147,7 +2132,7 @@ class Column(object):
         try:
             return np.unique(self.__getitem__())
         except TypeError:  # np arrays can't handle dtype='O':
-            return np.array({i for i in self.__getitem__()})
+            return np.array(set(self.__getitem__()))
 
     def histogram(self):
         """ 

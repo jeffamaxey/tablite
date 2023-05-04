@@ -16,12 +16,12 @@ def test_empty():
     table = Table.import_file(Path(__file__).parent / "data" / "empty.csv", import_as='csv')
 
     assert len(table.columns) == 0
-    assert len(list(table.rows)) == 0
+    assert not list(table.rows)
 
     table = Table.import_file(Path(__file__).parent / "data" / "empty_newline.csv", import_as='csv')
 
     assert len(table.columns) == 0
-    assert len(list(table.rows)) == 0
+    assert not list(table.rows)
 
 def test_text_escape():
     text_escape = TextEscape(delimiter=';',openings=None,closures=None)
@@ -64,11 +64,9 @@ def test_filereader_123csv():
     sort_order = {'B': False, 'C': False, 'A': False}
     table7 = table7.sort(**sort_order)
 
-    headers = ",".join([c for c in table7.columns])
+    headers = ",".join(list(table7.columns))
     data = [headers]
-    for row in table7.rows:
-        data.append(",".join(str(v) for v in row))
-
+    data.extend(",".join(str(v) for v in row) for row in table7.rows)
     s = "\n".join(data)
     print(s)
     csv_file.write_text(s)  # write
@@ -79,7 +77,7 @@ def test_filereader_123csv():
     for c in tr_table.columns:
         col = tr_table[c]
         col[:] = DataTypes.guess(col)
-    
+
     tr_table.show()
 
     assert tr_table == table7

@@ -13,7 +13,7 @@ def refresh():
 def test_groupby():
     t = Table()
     for c in 'abcde':
-        t.add_column(c,data=[i for i in range(5)])
+        t.add_column(c, data=list(range(5)))
 
     # we want to add two new columns using the functions:
     def f1(a, b, c):
@@ -35,7 +35,7 @@ def test_groupby():
 
     assert len(t) == 5
     assert list(t.columns) == list('abcdefg')
-    
+
     t+=t
     t.show()
 
@@ -232,9 +232,12 @@ def test_reverse_pivot():
 
     records = 9
     t = Table()
-    t.add_column('record id', data=[i for i in range(records)])
+    t.add_column('record id', data=list(range(records)))
     for column in [f"4.{i}.a" for i in range(5)]:
-        t.add_column(column, data=[choice(['a', 'h', 'e', None]) for i in range(records)])
+        t.add_column(
+            column,
+            data=[choice(['a', 'h', 'e', None]) for _ in range(records)],
+        )
 
     print("\nshowing raw data:")
     t.show()
@@ -252,7 +255,7 @@ def test_reverse_pivot():
     # |        7|a    |a    |None |None |None |
     # |        8|None |a    |h    |a    |a    |
     # +=========+=====+=====+=====+=====+=====+
-    
+
     reconstructed = Table()
     reconstructed.add_column('record id')
     reconstructed.add_column('4.x')
@@ -334,7 +337,7 @@ def test_reverse_pivot():
     # |4  |4.4.a|                  1|               1|               4|               3|
     # +===+=====+===================+================+================+================+
     assert len(t2)==5 and len(t2.columns)==5
-    assert t2['Count(ahe,ahe=e)'][0] == None
+    assert t2['Count(ahe,ahe=e)'][0] is None
 
 
 def test_reindex():

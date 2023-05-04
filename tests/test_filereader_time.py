@@ -37,7 +37,7 @@ def test01_timing():
     assert len(big_table) == 10_000 * 10_000,len(big_table)
 
     a_preview = big_table['A', 'B', 1_000:900_000:700]
-    rows = [r for r in a_preview[3:15:3].rows]
+    rows = list(a_preview[3:15:3].rows)
     assert rows == [[3100,31000], [5200,52000], [7300, 73000], [9400, 94000]]
     a_preview.show()
   

@@ -21,13 +21,13 @@ def test2():
     with h5py.File(path, 'a') as h5:
         dset = h5.create_dataset(name=key, dtype=h5py.Empty('f'))
         dset.attrs['now'] = time.time()
-    
+
     with h5py.File(path, 'w') as h5:
-        assert list(h5.keys()) == []
+        assert not list(h5.keys())
 
     with h5py.File(path, 'r+') as h5:
         assert key not in h5.keys()
         dset = h5.create_dataset(name=key, dtype=h5py.Empty('f'))
         dset.attrs['now'] = time.time()
-    
+
     path.unlink()

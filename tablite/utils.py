@@ -120,9 +120,9 @@ def summary_statistics(values,counts):
 def _numeric_statistics_summary(v,c):
     VC = [[v,c] for v,c in zip(v, c)]
     VC.sort()
-    
+
     total_val, mode, median, total_cnt =  0, None, None, sum(c)
-    
+
     max_cnt, cnt_n = -1, 0
     mn,cstd = 0, 0.0
     iqr25 = total_cnt * 1/4
@@ -154,7 +154,7 @@ def _numeric_statistics_summary(v,c):
         elif cnt_0 == iqr75:
             _,delta = divmod(3*(total_cnt-1), 4)
             iqr_high = (vx_0 * (4-delta) + vx * delta) / 4
-        
+
         # stdev calulations
         # cnt = cnt_n  # self.count += 1
         dt = cx * (vx-mn) # dt = value - self.mean
@@ -167,11 +167,11 @@ def _numeric_statistics_summary(v,c):
 
         total_val += vx*cx
         vx_0 = vx
-    
+
     var = cstd / (cnt_n-1) if cnt_n > 1 else 0
     stdev = var**(1/2) if cnt_n > 1 else 0
 
-    d = {
+    return {
         'min': vmin,
         'max': vmax,
         'mean': total_val / (total_cnt if total_cnt >= 1 else None),
@@ -183,7 +183,6 @@ def _numeric_statistics_summary(v,c):
         'iqr': iqr_high - iqr_low,
         'sum': total_val,
     }
-    return d
 
 
 def _none_type_summary(v,c):
@@ -200,8 +199,6 @@ def _boolean_statistics_summary(v,c):
             d[k] = True
         elif v == 0:
             d[k] = False
-        else:
-            pass
     return d
 
 
@@ -237,8 +234,6 @@ def _time_statistics_summary(v,c):
             d[k] = time.fromtimestamp(hours,minutes,timestamp)
         elif k in {'stdev','iqr','sum'}:
             d[k] = f"{d[k]} seconds"
-        else:
-            pass
     return d
 
 
@@ -250,8 +245,6 @@ def _date_statistics_summary(v,c):
             d[k] = date(*datetime.fromtimestamp(d[k]).timetuple()[:3])
         elif k in {'stdev','iqr','sum'}:
             d[k] = f"{d[k]/(24*60*60)} days"
-        else:
-            pass
     return d
 
 

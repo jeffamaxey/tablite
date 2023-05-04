@@ -24,7 +24,7 @@ def test_the_basics():
     t = Table()
     t['A'] = [1,2,3]
     t['B'] = ['a','b','c']
-    
+
     # all columns at once (slower)
     t2 = Table()
     t2.add_columns('A','B')
@@ -34,7 +34,7 @@ def test_the_basics():
     # load data:
     path = pathlib.Path('tests/data/book1.csv')
     t3 = Table.import_file(path, import_as='csv', columns=None)
-    
+
     # to view any table use .show(). Note that show gives either first and last 7 rows or the whole table if it is less than 20 rows.
     t3.show()
     # +===+===+===========+===========+===========+===========+===========+
@@ -111,7 +111,7 @@ def test_the_basics():
 
     print(t4['mixed'])
     # <Column>(16 values | key=25)
-    
+
     # to view the datatypes in a column, use Column.types()
     type_dict = t4['mixed'].types()
     for k,v in type_dict.items():
@@ -125,7 +125,7 @@ def test_the_basics():
     # <class 'datetime.date'> 1
     # <class 'datetime.time'> 1
     # <class 'datetime.timedelta'> 1
-    
+
     # you may notice that all datatypes in t3 are str. To convert to the most probable
     # datatype used the datatype modules .guess function on each column
     t3['a'] = DataTypes.guess(t3['a'])
@@ -136,12 +136,12 @@ def test_the_basics():
 
     # APPEND
     # -----------------------------------------
-    
+
     # to append one table to another, use + or += 
     print('length before:', len(t3))  # length before: 45
-    t5 = t3 + t3  
+    t5 = t3 + t3
     print('length after +', len(t5))  # length after + 90
-    t5 += t3 
+    t5 += t3
     print('length after +=', len(t5))  # length after += 135
 
     # if you need a lot of numbers for a test, you can repeat a table using * and *=
@@ -165,12 +165,12 @@ def test_the_basics():
     # +===+===+=====+
 
     # As you can see above, t6['C'] is padded with "None" where t2 was missing the columns.
-    
+
     # if you need a more detailed view of the columns you can iterate:
     for name in t.columns:
-        col_from_t = t[name]
         if name in t2.columns:
             col_from_t2 = t2[name]
+            col_from_t = t[name]
             print(name, col_from_t == col_from_t2)
         else:
             print(name, "not in t2")
@@ -292,18 +292,16 @@ def test_sort_parallel():
         t = tuple(i)
         if t in z1:
             continue
-        else:
-            z1.add(t)
-            ts1.append(t)
+        z1.add(t)
+        ts1.append(t)
 
     z2,ts2 = set(),[]
     for i in sorted_table.rows:
         t = tuple(i)
         if t in z2:
             continue
-        else:
-            z2.add(t)
-            ts2.append(t)
+        z2.add(t)
+        ts2.append(t)
 
     assert z1==z2
     assert ts1 != ts2
@@ -366,7 +364,7 @@ def test_join_logic():
     # |None  |None  |
     # +======+======+
     expected = [[1, None], [2, 'a'], [2, None], [None, 'a'], [None, None], [3, 'b'], [3, 'd'], [4, 'b'], [4, 'd']]
-    assert expected == [r for r in left_join.rows]
+    assert expected == list(left_join.rows)
 
     # inner join
     # SELECT number, letter FROM numbers JOIN letters ON numbers.colour == letters.color
@@ -386,8 +384,8 @@ def test_join_logic():
     # |     4|b     |
     # |     4|d     |
     # +======+======+
-    assert [i for i in inner_join['number']] == [2, 2, None, None, 3, 3, 4, 4]
-    assert [i for i in inner_join['letter']] == ['a', None, 'a', None, 'b', 'd', 'b', 'd']
+    assert list(inner_join['number']) == [2, 2, None, None, 3, 3, 4, 4]
+    assert list(inner_join['letter']) == ['a', None, 'a', None, 'b', 'd', 'b', 'd']
 
     # outer join
     # SELECT number, letter FROM numbers OUTER JOIN letters ON numbers.colour == letters.color
@@ -410,7 +408,7 @@ def test_join_logic():
     # |None  |c     |
     # +======+======+
     expected = [[1, None], [2, 'a'], [2, None], [None, 'a'], [None, None], [3, 'b'], [3, 'd'], [4, 'b'], [4, 'd'], [None, 'c']]
-    assert expected == [r for r in outer_join.rows]
+    assert expected == list(outer_join.rows)
 
     assert left_join != inner_join
     assert inner_join != outer_join
@@ -427,10 +425,13 @@ def test_lookup_logic():
     random.seed(11)
     table_size = 40
 
-    times = [DataTypes.time(random.randint(21, 23), random.randint(0, 59)) for i in range(table_size)]
+    times = [
+        DataTypes.time(random.randint(21, 23), random.randint(0, 59))
+        for _ in range(table_size)
+    ]
     stops = ['Stadium', 'Hillside', 'Hillside View', 'Hillside Crescent', 'Downtown-1', 'Downtown-2',
              'Central station'] * 2 + [f'Random Road-{i}' for i in range(table_size)]
-    route = [random.choice([1, 2, 3]) for i in stops]
+    route = [random.choice([1, 2, 3]) for _ in stops]
 
     bustable = Table()
     bustable.add_column("time", data=times)
@@ -454,7 +455,7 @@ def test_lookup_logic():
         ['Edward', 'Downtown-2', time(21, 51), 'Downtown-2', 1], 
         ['Fred', 'Chicago', None, None, None]
         ]
-    assert expected == [r for r in lookup1_sorted.rows]
+    assert expected == list(lookup1_sorted.rows)
 
     # USER DEFINED FUNCTIONS
     # -----------------------------------------

@@ -8,22 +8,18 @@ def test_np_types():
         obj = getattr(np, name)
         if hasattr(obj, 'dtype'):
             try:
-                if 'time' in name:
-                    npn = obj(0, 'D')
-                else:
-                    npn = obj(0)
+                npn = obj(0, 'D') if 'time' in name else obj(0)
                 nat = npn.item()
                 print('{0} ({1!r}) -> {2}'.format(name, npn.dtype.char, type(nat)))
             except:
                 pass
-    pass # NOTE: Just use .tolist() to convert 'O' type data to native python.
 
 
 def test_dt_ranks():
     r = Rank('A', 'B', 'C')
     r.match('C')
     assert list(r) == ['C', 'A', 'B']
-    assert [i for i in r] == ['C', 'A', 'B']
+    assert list(r) == ['C', 'A', 'B']
     r.match('B')
     assert list(r) == ['C', 'B', 'A']
     r.match('C')
@@ -36,7 +32,7 @@ def test_dt_ranks():
     assert list(r) == ['C', 'B', 'A']
     r.match('A')
     assert list(r) == ['A', 'C', 'B']
-    for i in range(5):
+    for _ in range(5):
         r.match('A')
     assert list(r) == ['A', 'C', 'B']
     
@@ -60,7 +56,6 @@ def test_datatype_inference():
 
     try:
         DataTypes.infer('1.0', float)
-        assert True, "1.0 is a float."
     except ValueError:
         assert False
 

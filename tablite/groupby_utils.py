@@ -125,10 +125,7 @@ class StandardDeviation(GroupbyFunction):
 
     @property
     def value(self):
-        if self.count <= 1:
-            return 0.0
-        variance = self.c / (self.count - 1)
-        return variance ** (1 / 2)
+        return 0.0 if self.count <= 1 else (self.c / (self.count - 1))**(1 / 2)
 
 
 class Histogram(GroupbyFunction):

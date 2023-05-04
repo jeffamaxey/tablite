@@ -117,8 +117,7 @@ def text_sort(values, reverse):
     text = {str(i):i for i in values}
     L = list(text.keys())
     L.sort(key=uca_collator.sort_key, reverse=reverse)
-    d = {text[value]:ix for ix,value in enumerate(L)}
-    return d
+    return {text[value]:ix for ix,value in enumerate(L)}
 
 def unix_sort(values, reverse):
     """
@@ -153,8 +152,7 @@ def unix_sort(values, reverse):
         VC = tf(value)
         L.append((TC,VC,value))
     L.sort(reverse=reverse)
-    d = {value:ix for ix,(_,_,value) in enumerate(L)}
-    return d
+    return {value:ix for ix,(_,_,value) in enumerate(L)}
 
 
 def excel_sort(values, reverse):
@@ -178,10 +176,10 @@ def excel_sort(values, reverse):
     """
     L = []
     text = [i for i in values if isinstance(i, str)]
-    
+
     text.sort(key=uca_collator.sort_key, reverse=reverse)
     L = [(2,ix,v) for ix,v in enumerate(text)]
-    
+
     for value in (i for i in values if not isinstance(i,str)):
         t = type(value)
         TC = _excel_typecodes[t]
@@ -190,8 +188,7 @@ def excel_sort(values, reverse):
         L.append((TC,VC,value))
 
     L.sort(reverse=reverse)
-    d = {value:ix for ix,(_,_,value) in enumerate(L)}
-    return d
+    return {value:ix for ix,(_,_,value) in enumerate(L)}
 
 modes = {
     'alphanumeric': text_sort,

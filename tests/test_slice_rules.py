@@ -7,8 +7,8 @@ def test_getitem():
     L = [1,2,3,4]
     assert L[:] == [1,2,3,4]  # slice(None,None,None)
     assert L[:0] == []  # slice(None,0,None)
-    assert L[0:] == [1,2,3,4]  # slice(0,None,None)
-    
+    assert L[:] == [1,2,3,4]
+
     assert L[:2] == [1,2]  # slice(None,2,None)
 
     assert L[-1:] == [4]  # slice(-1,None,None)
@@ -20,9 +20,9 @@ def test_getitem():
     assert L[-1:0:1] == []  # slice(-1,0,1) --> slice(4,0,-1) --> for i in range(4,0,1)
     assert L[-3:-1:1] == [2,3]  # slice(-3,-1,-1) --> slice(1,3,1)  --> for i in range(1,3,1)
 
-    assert L[0:0] == []  # for i in range(0,0) ...
+    assert L[:0] == []
     assert L[2:2] == []  # for i in range(2,2)
-    
+
     assert L[:10] == [1,2,3,4]  # slice(None,10,None) --> slice(0,sys.maxsize,1) --> for i in range(0,sys.maxsize,1):...
     try:
         assert L[10] == []
@@ -34,8 +34,8 @@ def test_getitem():
         assert True
     assert L[1:2] == [2]  # slice(1,2,1) --> for i in range(1,2):...
     assert L[1:3] == [2,3]
-    assert L[0:4:2] == [1,3]
-    assert L[0:5:2] == [1,3]
+    assert L[:4:2] == [1,3]
+    assert L[:5:2] == [1,3]
     assert L[::2] == [1,3]
     assert L[1::2] == [2,4]
     assert L[4:0:-1] == [4,3,2] # start included, stop excluded.
@@ -60,7 +60,7 @@ def test_setitem():
     # L = [1,2,3]
     # L[-4] = 4
     # IndexError: list assignment index out of range
-    
+
     # SLICES - ONE VALUE!
     # -------------------
 
@@ -69,7 +69,7 @@ def test_setitem():
     assert L == [4,5,1,2,3]
 
     L = [1,2,3]
-    L[0:] = [4,5]  # SLICE: REPLACE L after 0 with NEW
+    L[:] = [4,5]
     assert L == [4,5]
 
     L = [1,2,3]
@@ -87,7 +87,7 @@ def test_setitem():
     # SLICES - TWO VALUES!
     # --------------------
     L = [1,2,3]
-    L[0:1] = [4,5]  # SLICE: DROP L between A,B (L[0]=[1]). INSERT NEW starting on 0.
+    L[:1] = [4,5]
     assert L == [4,5,2,3]
 
     L = [1,2,3]
@@ -99,21 +99,21 @@ def test_setitem():
     assert L == [10,4]
 
     L = [1,2,3]
-    L[0:3] = [4]
+    L[:3] = [4]
     assert L == [4]  # SLICE: DROP L between A,B (L[0:3] = [1,2,3]). INSERT NEW starting on 0
 
     # SLICES - THREE VALUES!
     # ----------------------
 
     L = [1,2,3]
-    L[0::2] = [4,5]  # SLICE: for new_index,position in enumerate(range(0,end,step=2)): REPLACE L[position] WITH NEW[ew_index]
+    L[::2] = [4,5]
     assert L == [4,2,5]
 
-    L = [1,1,1,1,1,1] 
-    L[0::2] = [2,3,4]  # SLICE: for new_index,position in enumerate(range(0,end,step=2)): REPLACE L[position] WITH NEW[ew_index]
+    L = [1,1,1,1,1,1]
+    L[::2] = [2,3,4]
     assert L == [2, 1, 3, 1, 4, 1]
 
-    L = [1,1,1,1,1,1] 
+    L = [1,1,1,1,1,1]
     L[1::2] = [2,3,4]  # SLICE: for new_index,position in enumerate(range(0,end,step=2)): REPLACE L[position] WITH NEW[ew_index]
     assert L == [1, 2, 1, 3, 1, 4]
 
@@ -129,7 +129,7 @@ def test_setitem():
     # L[:1:-2] = [2,3,4]  
     # ValueError: attempt to assign sequence of size 3 to extended slice of size 2
 
-    L = [1,1,1,1,1,1] 
+    L = [1,1,1,1,1,1]
     L[None::-2] = [2,3,4]  # SLICE: for new_index, position in enumerate(reversed(range(start,end,-2)): REPLACE L[position] WITH NEW[new_index]
     assert L == [1, 4, 1, 3, 1, 2]  #                                                       ! ----^
 
@@ -137,16 +137,16 @@ def test_setitem():
     L = [1,1,1,1,1,1]
     new = [2,3,4]
     for new_ix,pos in enumerate(range(*slice(None,None,-2).indices(len(L)))):
-        L[pos] = new[new_ix] 
+        L[pos] = new[new_ix]
     assert L == [1, 4, 1, 3, 1, 2]
 
     # What happens if we leave out the first : ?
-    L = [1,1,1,1,1,1] 
+    L = [1,1,1,1,1,1]
     L[:-2] = [2,3,4]  # SLICE: REPLACE L before -2 with NEW
     assert L == [2,3,4,1,1] 
 
     # THIS MEANS THAT None is an active OPERATOR that has different meaning depending on the args position.
-    L = [1,1,1,1,1,1] 
+    L = [1,1,1,1,1,1]
     L[None:None:-2] = [2,3,4]
     assert L == [1, 4, 1, 3, 1, 2]
 
@@ -162,22 +162,22 @@ def test_setitem():
     assert L[None : None :  2  ] == [1,3]
 
     L = [1,2,3]
-    L[None : None] = [4,5]  
+    L[None : None] = [4,5]
     assert L == [4,5]
     L = [1,2,3]
-    L[None : None:   1  ] = [4,5]  
+    L[None : None:   1  ] = [4,5]
     assert L==[4,5]
     L = [1,2,3]
-    L[None : None : None] = [4,5]  
+    L[None : None : None] = [4,5]
     assert L == [4,5]
     L = [1,2,3]
-    L[  1  : None : None] = [4,5]  
+    L[  1  : None : None] = [4,5]
     assert L == [1,4,5]
     L = [1,2,3]
-    L[None :   1  : None] = [4,5]  
+    L[None :   1  : None] = [4,5]
     assert L == [4,5,2,3]
     L = [1,2,3]
-    L[None : None :  2  ] = [4,5]  
+    L[None : None :  2  ] = [4,5]
     assert L==[4,2,5]
 
     L = [1,2,3,4]
@@ -194,8 +194,8 @@ def test_for_numpy():
 
     L2 = np.array(L)
     L2[:0] == []
-    L2[0:] == [1,2,3]
-    L2[0::2] == [1,3]
+    L2[:] == [1,2,3]
+    L2[::2] == [1,3]
 
     # Create h5py dataset.
     p = Path('this.h5')
@@ -270,7 +270,7 @@ class MyList(object):
                 self.items = self._getslice_(0,start) + list(value)  # self.items = self.items[:key.start] + list(value)
             elif key.stop != None and key.start == key.step == None:  # L[:3] = [1,2,3]
                 self.items = list(value) + self._getslice_(stop, len(self.items))  # self.items = list(value) + self.items[key.stop:]
-            elif key.step == None and key.start != None and key.stop != None:  # L[3:5] = [1,2,3]
+            elif key.step is None and key.start != None and key.stop != None:  # L[3:5] = [1,2,3]
                 stop = max(start,stop)
                 self.items = self._getslice_(0,start) + list(value) + self._getslice_(stop,len(self.items))   # self.items = self.items[:start] + list(value) + self.items[stop:]
             elif key.step != None:
@@ -320,7 +320,7 @@ def test_mylist():
     # L = MyList([1,2,3])
     # L[-4] = 4
     # IndexError: list assignment index out of range
-    
+
     # SLICES - ONE VALUE!
     # -------------------
 
@@ -329,7 +329,7 @@ def test_mylist():
     assert L == [4,5,1,2,3]
 
     L = MyList([1,2,3])
-    L[0:] = [4,5]  # SLICE: REPLACE L after 0 with NEW
+    L[:] = [4,5]
     assert L == [4,5]
 
     L = MyList([1,2,3])
@@ -347,7 +347,7 @@ def test_mylist():
     # SLICES - TWO VALUES!
     # --------------------
     L = MyList([1,2,3])
-    L[0:1] = [4,5]  # SLICE: DROP L between A,B (L[0]=[1]). INSERT NEW starting on 0.
+    L[:1] = [4,5]
     assert L == [4,5,2,3]
 
     L = MyList([1,2,3])
@@ -355,7 +355,7 @@ def test_mylist():
     assert L == [1,4,5,2,3]
 
     L = MyList([1,2,3])
-    L[0:2] = [4,5,6]
+    L[:2] = [4,5,6]
     assert L == [4,5,6,3]
 
     L = MyList([10,20,30])
@@ -363,18 +363,18 @@ def test_mylist():
     assert L == [10,4]
 
     L = MyList([1,2,3])
-    L[0:3] = [4]
+    L[:3] = [4]
     assert L == [4]  # SLICE: DROP L between A,B (L[0:3] = [1,2,3]). INSERT NEW starting on 0
 
     # SLICES - THREE VALUES!
     # ----------------------
 
     L = MyList([1,2,3])
-    L[0::2] = [4,5]  # SLICE: for new_index,position in enumerate(range(0,end,step=2)): REPLACE L[position] WITH NEW[ew_index]
+    L[::2] = [4,5]
     assert L == [4,2,5]
 
     L = MyList([1,1,1,1,1,1])
-    L[0::2] = [2,3,4]  # SLICE: for new_index,position in enumerate(range(0,end,step=2)): REPLACE L[position] WITH NEW[ew_index]
+    L[::2] = [2,3,4]
     assert L == [2, 1, 3, 1, 4, 1]
 
     L = MyList([1,1,1,1,1,1])
@@ -407,7 +407,7 @@ def test_mylist():
     L = MyList([1,1,1,1,1,1])
     new = [2,3,4]
     for new_ix,pos in enumerate(range(*slice(None,None,-2).indices(len(L)))):
-        L[pos] = new[new_ix] 
+        L[pos] = new[new_ix]
     assert L == [1, 4, 1, 3, 1, 2]
 
     # What happens if we leave out the first : ?
@@ -432,27 +432,27 @@ def test_mylist():
     assert L[None : None :  2  ] == [1,3]
 
     L = MyList([1,2,3])
-    L[None : None] = [4,5]  
+    L[None : None] = [4,5]
     assert L == [4,5]
 
     L = MyList([1,2,3])
-    L[None : None:   1  ] = [4,5]  
+    L[None : None:   1  ] = [4,5]
     assert L==[4,5]
 
     L = MyList([1,2,3])
-    L[None : None : None] = [4,5]  
+    L[None : None : None] = [4,5]
     assert L == [4,5]
 
     L = MyList([1,2,3])
-    L[  1  : None : None] = [4,5]  
+    L[  1  : None : None] = [4,5]
     assert L == [1,4,5]
 
     L = MyList([1,2,3])
-    L[None :   1  : None] = [4,5]  
+    L[None :   1  : None] = [4,5]
     assert L == [4,5,2,3]
 
     L = MyList([1,2,3])
-    L[None : None :  2  ] = [4,5]  
+    L[None : None :  2  ] = [4,5]
     assert L==[4,2,5]
 
     L = MyList([1,2,3,4])

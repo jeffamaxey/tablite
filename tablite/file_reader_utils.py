@@ -37,14 +37,14 @@ class TextEscape(object):
         if openings is None:
             openings = [None]
         elif isinstance(openings, str):
-            self.openings = {c for c in openings}
+            self.openings = set(openings)
         else:
             raise TypeError(f"expected str, got {type(openings)}")           
 
         if closures is None:
             closures = [None]
         elif isinstance(closures, str):
-            self.closures = {c for c in closures}
+            self.closures = set(closures)
         else:
             raise TypeError(f"expected str, got {type(closures)}")
 
@@ -53,14 +53,14 @@ class TextEscape(object):
         self.delimiter = delimiter
         self._delimiter_length = len(delimiter)
         self.strip_leading_and_tailing_whitespace= strip_leading_and_tailing_whitespace
-        
+
         if qoute is None:
             pass
         elif qoute in openings + closures:
             raise ValueError("It's a bad idea to have qoute character appears in openings or closures.")
         else:
             self.qoute = qoute
-        
+
         if not qoute:
             self.c = self._call1
         elif not any(openings + closures):
@@ -129,8 +129,6 @@ class TextEscape(object):
                 depth += 1
             elif c in self.closures:
                 depth -= 1
-            else:
-                pass
             ix += 1
 
         if s:
@@ -163,10 +161,9 @@ def detect_seperator(text):
             raise ValueError("separator not detected")
     if len(seps) == 1:
         return seps.pop()
-    else:
-        frq = [(text.count(i), i) for i in seps]
-        frq.sort(reverse=True)  # most frequent first.
-        return frq[0][-1]
+    frq = [(text.count(i), i) for i in seps]
+    frq.sort(reverse=True)  # most frequent first.
+    return frq[0][-1]
 
 
 def get_headers(path, linecount=10): 
